@@ -1,23 +1,30 @@
 #---------------------------------------------------------------------------
 # CUDA_OPTIMIZATIONS.PY
 # Using the GPU to accelerate an electrical power grid visualization
+#
 # Date:                   03/01/2023
 # Authors:                Pragati Dode, Breanna Powell, and William Selke
 # 
 # +++++++++++++++++ DETAILS ABOUT SYSTEM ++++++++++++++
-# IDE:                    Visual Studio Code
-# Hosts Used:             ____
-# CUDA Version:           _____
+# IDEs:                   Visual Studio Code; PyCharm
+# Host Used:              ____put Will's computer info here
+# Device Used:            ____put Will's computer info here
+# CUDA Version:           _____put Will's computer info here
 # Device Architecture:    Ampere
 #
 # +++++++++++++++++ INSTALLATION INSTRUCTIONS +++++++++++++++++ 
 # https://numba.readthedocs.io/en/stable/cuda/overview.html
+#
 # Use the following command if using Conda:
 # $ conda install cudatoolkit
-
+#
+# Use the following command if using pip:
+# $ pip install cuda-python
+#
 # +++++++++++++++++ LIBRARY USED +++++++++++++++++ 
 # Numba library information: https://numba.readthedocs.io/en/stable/cuda/index.html
 # Note: Numba does not implement: dynamic parallelism and texture memory
+
 
 # Learn more about our GPU using this function:
 cuda.detect()
@@ -36,7 +43,7 @@ def kernel(x, out):
 def kernel(x, out):
   start = cuda.grid(1)      # This tells to start with the leftmost index within the block
   stride = cuda.gridsize(1) # The stride is the same as the width of a block (gridsize)
-  for i in range(start, x.shape[0], stride): # Shape gives the size of the input array
+  for i in range(start, x.shape[0], stride): # Shape gives the total size of the input array
     out[i] = math.atan(x[i])
 
 
@@ -58,7 +65,8 @@ blocks_per_grid = 32    # gridsize
 threads_per_block = 128 # blocksize
 
 # We can time our kernels using this:
-# https://realpython.com/python-timer/
+# https://realpython.com/python-timer/ - will time in seconds
+# https://docs.python.org/3/library/time.html#time.perf_counter - there is a nanoseconds option too
 startTimer = time.perf_counter()
 
 # +++++++++++++++++ KERNEL FUNCTION +++++++++++++++++ 
