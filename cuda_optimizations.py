@@ -1,3 +1,9 @@
+# INSTALLATION INSTRUCTIONS:
+# https://numba.readthedocs.io/en/stable/cuda/overview.html
+
+# Use the following command if using Conda:
+# $ conda install cudatoolkit
+
 # Info about the numba library: https://numba.readthedocs.io/en/stable/cuda/index.html
 
 from numba import cuda
