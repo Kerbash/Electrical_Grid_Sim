@@ -1,14 +1,23 @@
-# ---------------INSTALLATION INSTRUCTIONS ----------------------------#
+#---------------------------------------------------------------------------
+# CUDA_OPTIMIZATIONS.PY
+# Using the GPU to accelerate an electrical power grid visualization
+# Date:                   03/01/2023
+# Authors:                Pragati Dode, Breanna Powell, and William Selke
+# 
+# +++++++++++++++++ DETAILS ABOUT SYSTEM ++++++++++++++
+# IDE:                    Visual Studio Code
+# Hosts Used:             ____
+# CUDA Version:           _____
+# Device Architecture:    Ampere
+#
+# +++++++++++++++++ INSTALLATION INSTRUCTIONS +++++++++++++++++ 
 # https://numba.readthedocs.io/en/stable/cuda/overview.html
 # Use the following command if using Conda:
 # $ conda install cudatoolkit
 
-# ---------------LIBRARY USED -----------------------------------------#
-# Info about the numba library: https://numba.readthedocs.io/en/stable/cuda/index.html
-# Numba does not implement all features of CUDA, yet. 
-# Some missing features are listed below:
-# dynamic parallelism
-# texture memory
+# +++++++++++++++++ LIBRARY USED +++++++++++++++++ 
+# Numba library information: https://numba.readthedocs.io/en/stable/cuda/index.html
+# Note: Numba does not implement: dynamic parallelism and texture memory
 
 # Learn more about our GPU using this function:
 cuda.detect()
@@ -25,39 +34,52 @@ def kernel(x, out):
 # Example of a strided kernel
 @cuda.jit
 def kernel(x, out):
-  start = cuda.grid(1)      #
-  stride = cuda.gridsize(1) # the stride is the same as the width of a block (gridsize)
-  for i in range(start, x.shape[0], stride): 
+  start = cuda.grid(1)      # This tells to start with the leftmost index within the block
+  stride = cuda.gridsize(1) # The stride is the same as the width of a block (gridsize)
+  for i in range(start, x.shape[0], stride): # Shape gives the size of the input array
     out[i] = math.atan(x[i])
 
 
 
 import numpy as np
+import time
 
 # Adapted from https://colab.research.google.com/github/cbernet/maldives/blob/master/numba/numba_cuda_kernel.ipynb#scrollTo=fACSmHLzJanZ
+A = np.arange(4096,dtype=np.float32) #Creates an array of size 4096 of floats
 
-A = np.arange(4096,dtype=np.float32)
-
-# We can time our kernels using this:
-# %timeit (put a function call next to it)
-
-# Allocate space on the device for the input data
+# Allocate space on the device for the input data:
 d_A = cuda.to_device(A)
 
-# Output data - the GPU will fill this out:
+# Allocate space on the device for the output data:
 d_Out = cuda.device_array_like(d_A)
 
 # <<< 32, 128 >>> configuration
 blocks_per_grid = 32    # gridsize
 threads_per_block = 128 # blocksize
+
+# We can time our kernels using this:
+# https://realpython.com/python-timer/
+startTimer = time.perf_counter()
+
+# +++++++++++++++++ KERNEL FUNCTION +++++++++++++++++ 
 kernel[blocks_per_grid, threads_per_block](d_A, d_Out)
 
 # wait for all threads to complete
 cuda.synchronize()
+stopCompTime = time.perf_counter()
 
 # Return the matrix to the host
 d_Out.copy_to_host()
 
+stopFullTime = time.perf_counter()
+
+# See timing results
+print(f"Time spent just computing : {stopCompTime - startTimer:0.8f} seconds")
+print(f"Time with memory copying  : {stopFullTime - startTimer:0.8f} seconds")
+
+
+
+# +++++++++++++++++ MORE NOTES +++++++++++++++++ 
 
 # https://thedatafrog.com/en/articles/boost-python-gpu/
 # We may have to store things in contiguous memory. Example:
