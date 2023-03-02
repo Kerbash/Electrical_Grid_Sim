@@ -1,24 +1,18 @@
 from datetime import datetime
 from random import random
 from random import random
+from tqdm import tqdm
 
-from home import home
+from home import home, perlin
 import matplotlib.pyplot as plt
 
 # MAP SIZE x MAP SIZE
-MAP_SIZE = 50
+MAP_SIZE = 512
+
+homes = perlin(seed=200, map_width=MAP_SIZE, map_height=MAP_SIZE)
 
 
-
-# create 20 homes from coord 20,20 to 29,29
-homes = []
-for i in range(20, 30):
-    for j in range(20, 30):
-        # randomize the coefficient
-        # 0.8 to 1.2
-        coef = 0.8 + (1.2 - 0.8) * random()
-        homes.append(home(i, 1, coef, i, j, None))
-
+tqdm = tqdm(total=24*len(homes))
 for hour in range(24):
     datetime_now = datetime(2020, 1, 1, hour, 0, 0)
     # plot the home in the graph
@@ -35,6 +29,7 @@ for hour in range(24):
         color = (1 - min(cur / 10, 1), 1 - min(cur / 10, 1), 1)
         plt.plot(home.x_coord, home.y_coord, marker='s', color=color)
         # set plot to Map Size
+        tqdm.update(1)
 
     plt.axis([0, MAP_SIZE, 0, MAP_SIZE])
     # clear the plot
@@ -44,4 +39,6 @@ for hour in range(24):
     plt.title(datetime_now)
     # save plot to file
     plt.savefig(str(hour) + '.png')
+
+tqdm.close()
 
