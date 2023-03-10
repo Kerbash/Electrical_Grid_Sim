@@ -2,7 +2,7 @@
 # CUDA_OPTIMIZATIONS.PY
 # Using the GPU to accelerate an electrical power grid visualization
 #
-# Date:                   03/01/2023
+# Date:                   03/14/2023
 # Authors:                Pragati Dode, Breanna Powell, and William Selke
 # 
 # +++++++++++++++++ DETAILS ABOUT SYSTEM ++++++++++++++
@@ -12,17 +12,19 @@
 # CUDA Version:           _____put Will's computer info here
 # Device Architecture:    Ampere
 #
-# +++++++++++++++++ INSTALLATION INSTRUCTIONS +++++++++++++++++ 
-# https://numba.readthedocs.io/en/stable/cuda/overview.html
+# +++++++++++++++++ INSTALLATION INSTRUCTIONS +++++++++++++++++
+# https://numba.readthedocs.io/en/stable/user/installing.html
 #
-# Use the following command if using Conda:
+# Use the following commands if using Conda:
 # $ conda install cudatoolkit
+# $ conda install tqdm
 #
-# Use the following command if using pip:
+# Use the following commands if using pip:
 # $ pip install cuda-python
 #
 # +++++++++++++++++ LIBRARY USED +++++++++++++++++ 
-# Numba library information: https://numba.readthedocs.io/en/stable/cuda/index.html
+# Numba library information: https://numba.readthedocs.io/en/stable/cuda/overview.html
+# Numba library contents: https://numba.readthedocs.io/en/stable/cuda/index.html
 # Note: Numba does not implement: dynamic parallelism and texture memory
 
 
