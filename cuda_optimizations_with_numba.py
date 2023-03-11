@@ -32,17 +32,13 @@ import sys
 import matplotlib.pyplot as plt
 
 # Sizes:
-TOTAL_HOUSES = 320000                           
-BLOCK_SIZE = 128                          # NUMBER OF THREADS PER BLOCK
-GRID_SIZE = TOTAL_HOUSES//BLOCK_SIZE      # NUMBER OF BLOCKS PER GRID = 320000 / 128 THREADS = 2,500 BLOCKS
-MAP_SIZE = math.sqrt(GRID_SIZE)           # 50 BY 50 SQUARE HEATMAP (sqrt(BLOCKS)
-
-# Hardware Constraints:
-MAX_BLOCKS = 65535
-
-# CUDA configuration - grid size
-if(GRID_SIZE > MAX_BLOCKS):
-  sys.exit("The number of blocks exceeds the maximum")
+CITY_WIDTH = 4096           # 4096 * 4096 = 16,777,216 total houses          
+                            # Note: There does not need to be a thread for every house.
+                            # There just needs to be a thread for each heatmap cell.
+                                           
+BLOCK_SIZE = 64                                # NUMBER OF THREADS PER BLOCK
+MAP_SIZE = 64                                  # SIZE OF SQUARE HEATMAP = 64 * 64 = 4096 heatmap cells to fill
+GRID_SIZE = (MAP_SIZE * MAP_SIZE)//BLOCK_SIZE  # NUMBER OF BLOCKS PER GRID = 4096 / 64 THREADS = 64 BLOCKS
 
 # Learn more about our GPU using this function:
 # cuda.detect()
@@ -51,29 +47,57 @@ if(GRID_SIZE > MAX_BLOCKS):
 # See example kernel functions: 
 # https://thedatafrog.com/en/articles/cuda-kernel-python/
 # https://colab.research.google.com/github/cbernet/maldives/blob/master/numba/numba_cuda_kernel.ipynb#scrollTo=fACSmHLzJanZ
-#
+# https://numba.readthedocs.io/en/stable/cuda/examples.html#matrix-multiplication
+
 # Each thread loops through one chunk of the input array and combines the power consumption
 # into one cell of the output array.
 # numba.cuda.local.array(shape, type) - create a local array
 # numba.cuda.shared.array(shape, type) - create a shared memory array
 
 @cuda.jit
-def consolidatePowerConsumption(x, out):
-  idx = cuda.grid(1)         # This tells to start with the leftmost index within the block
-  stride = cuda.gridsize(1)  # The stride is the same as the width of a block (gridsize)
-  for i in range(stride):
-    out[idx] = out[idx] + x[i]
+def consolidatePowerConsumption(In, Out):
+  tile = cuda.gridsize(1)  # The tile stride is the same as the width of a block (gridsize)
+  print(tile)
+
+  sharedIn = cuda.shared.array(shape=(tile, tile), dtype=np.float64) # Each thread takes care of 1 tile of the input matrix.
+  localOut = np.float64(0.) # Each thread takes care of 1 cell of the heatmap.
+  
+  x, y = cuda.grid(2)
+  idx = cuda.threadIdx.x
+  idy = cuda.threadIdy.y
+  
+  for i in range(tile):
+
+    # Use the shared memory
+    sharedIn[idy, idx] = 0
+    if y < In.shape[0] and (idx + i * BLOCK_SIZE) < In.shape[1]:
+      sharedIn[idy, idx] = In[y, idx + i * BLOCK_SIZE] # Load the data to shared.
+
+    # Wait for load to finish
+    cuda.syncthreads()
+
+    for j in range(BLOCK_SIZE):
+      localOut += sharedIn[idy, j]
+
+    # Wait until all threads finish computing
+    cuda.syncthreads()
+  
+  if y < Out.shape[0] and x < Out.shape[1]:
+    Out[y, x] = localOut
 
 # ---------------- CREATE INPUT AND OUTPUT ARRAYS TO PASS TO THE KERNEL ----------------------
+# max_pinned_size = cuda.max_pinned_bytes()
+# if (CITY_WIDTH*CITY_WIDTH*np.float64) > max_pinned_size:
+#   sys.exit("The city size exceeds pinned memory size")
 
-#In = np.empty(TOTAL_HOUSES,dtype=np.float64)        # Creates an input array of 64-bit precision
-In = cuda.pinned_array(TOTAL_HOUSES,dtype=np.float64)  # Creates a pinned memory array of 64-bit precision
+cityShape = (CITY_WIDTH, CITY_WIDTH)
+#In = np.empty(TOTAL_HOUSES, dtype=np.float64)       # Creates an input array of 64-bit precision
+In = cuda.pinned_array(cityShape, dtype=np.float64)  # Creates a pinned memory array of 64-bit precision
 
-# Randon numbers: https://numpy.org/doc/stable/reference/random/generated/numpy.random.randn.html
+# Random numbers: https://numpy.org/doc/stable/reference/random/generated/numpy.random.randn.html
 mean = 12      # mean
 stdDev = 5.5   # standard deviation for random numbers
 In[:] = mean + stdDev * np.random.randn(*In.shape)
-
 
 
 # ---------------------------------------- TIMER --------------------------------------------
@@ -85,19 +109,20 @@ startTimer = time.perf_counter()
 # Allocate space on the device for the input data:
 d_In = cuda.to_device(In)
 
-Out = np.empty(GRID_SIZE, dtype=np.float64) # Creates an output array of 64-bit precision
+neighborhoodShape = (GRID_SIZE, GRID_SIZE)
+Out = np.empty(neighborhoodShape, dtype=np.float64) # Creates an output array of 64-bit precision
+
+# Allocate space on the device for the output data:
+d_Out = cuda.device_array_like(Out)
 
 # -------- UPDATE THE PLOT FOR EVERY HOUR TO CREATE THE SIMULATION -------------
-for hour in range(24):
+# TODO: set to range(24) for 24 hours
+for hour in range(1):
 
-  # Allocate space on the device for the output data:
-  d_Out = cuda.device_array_like(Out)
-    
+  d_Out[:] = 0 # Clear the output array for each hour
+
   # ---------------------- CALL THE KERNEL FUNCTION -------------------------------------------- 
   consolidatePowerConsumption[GRID_SIZE, BLOCK_SIZE](d_In, d_Out)
-
-  # Wait for all threads to complete
-  # cuda.synchronize()
 
   # Out = np.empty(shape=d_Out.shape, dtype=d_Out.dtype)
   d_Out.copy_to_host(Out) # Copy contents from the device d_Out to host Out
@@ -105,30 +130,19 @@ for hour in range(24):
 
   # Clear the plot
   plt.clf() # clf = clear the figure: https://matplotlib.org/3.1.1/api/_as_gen/matplotlib.pyplot.clf.html
-  total_consumption = 0 # Total power consumption (for the plot) - reset with each loop
+  #total_consumption = 0 # Total power consumption (for the plot) - reset with each loop
   
-  for blockId in range(Out.size):
-    cur = Out[int(blockId)]       # The power consumption for that one block in that one hour
-    total_consumption += cur      # The power consumption total
-
-    xcoord = blockId // MAP_SIZE  # ex) if the blockId is 1501, then 1501 / 50 = x coordinate of 30
-    ycoord = blockId % MAP_SIZE   # ex) if the blockId is 1501, then 1501 % 50 = y coordinate of 1
-    
-    # set closer to red if the consumption is higher green if low
-    color = (1 - min(cur / 10, 1), 1 - min(cur / 10, 1), 1)
-    plt.plot(xcoord, ycoord, marker='s', color=color)
-    
-  # set plot to Map Size
-  plt.axis([0, MAP_SIZE, 0, MAP_SIZE])
+  # create a heat map from the matrix
+  plt.imshow(Out, cmap='hot', interpolation='nearest')
   
   # add a small total_consumption text to the plot
-  plt.text(10, MAP_SIZE-10, 'Total Consumption: ' + str(total_consumption))
+  # plt.text(10, MAP_SIZE-10, 'Total Consumption: ' + str(total_consumption))
   plt.text(10, MAP_SIZE-20, 'Hour: ' + str(hour))
 
   # set title
   plt.title("Power Consumption in a City of 360,000 Houses")
 
-  # plt.show()
+  plt.show()
   
 stopCompTime = time.perf_counter()
 
