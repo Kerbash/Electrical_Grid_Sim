@@ -44,7 +44,7 @@ homes = perlin(seed=200, map_width=MAP_SIZE, map_height=MAP_SIZE)
 # tqdm is a progress bar: https://www.educative.io/answers/what-is-tqdm-library-in-python
 tqdm = tqdm(total=24*len(homes)) 
 
-# -------- UPDATE THE PLOT FOR EVERY HOUR TO CREATE THE ANIMATION -------------
+# -------- UPDATE THE PLOT FOR EVERY HOUR TO CREATE THE SIMULATION -------------
 for hour in range(24):
     datetime_now = datetime(2020, 1, 1, hour, 0, 0)
     # plot the home in the graph
@@ -59,6 +59,12 @@ for hour in range(24):
         noise = 0.9 + (1.1 - 0.9) * random()
         # set the color based on the current consumption
         cur = home.get_consumption(datetime_now, noise)
+
+        # ---- TAKE THE LARGE DATASET, COMBINE MULTIPLE HOUSES, NAIVE VERSION ----
+        # TO DO: CREATE A LARGE NUMBER OF HOUSES
+        # TO DO: IMPLEMENT A NAIVE STENCIL METHOD THAT COMBINES SEVERAL HOUSES SO THAT 
+        #        A LARGE NUMBER OF HOUSES IS COMBINED AND FITS WITHIN A SMALL HEATMAP.
+
         total_consumption += cur
         # set closer to red if the consumption is higher green if low
         color = (1 - min(cur / 10, 1), 1 - min(cur / 10, 1), 1)

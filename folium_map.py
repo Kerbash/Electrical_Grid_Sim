@@ -1,7 +1,9 @@
 # THIS WAS JUST AN EXPERIMENT WITH A FOLIUM MAP
+# uses GeoPandas too
+# Problem: we would need shapefiles to make this work for a specific location
+# We would also need to have longitude and latitude coordinates for the houses to plot them.
 
-
-
+# +++++++++++++++++ INSTALLATION INSTRUCTIONS +++++++++++++++++
 # https://geopandas.org/en/stable/getting_started/install.html
 # https://forrest.nyc/get-started-with-python-and-geopandas-in-3-minutes/   <<< pip install
 # conda create -n geo_env
@@ -11,6 +13,7 @@
 # conda install python=3 geopandas
 # $ conda install geopandas
 # $ conda install pandas fiona shapely pyproj rtree
+
 
 import geopandas
 
