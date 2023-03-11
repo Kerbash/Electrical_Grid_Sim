@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 # Sizes:
 TOTAL_HOUSES = 320000                           
 BLOCK_SIZE = 128                          # NUMBER OF THREADS PER BLOCK
-GRID_SIZE = TOTAL_HOUSES//BLOCK_SIZE + 1  # NUMBER OF BLOCKS PER GRID = 320000 / 128 THREADS = 2,500 BLOCKS
+GRID_SIZE = TOTAL_HOUSES//BLOCK_SIZE      # NUMBER OF BLOCKS PER GRID = 320000 / 128 THREADS = 2,500 BLOCKS
 MAP_SIZE = math.sqrt(GRID_SIZE)           # 50 BY 50 SQUARE HEATMAP (sqrt(BLOCKS)
 
 # Hardware Constraints:
@@ -66,9 +66,8 @@ def consolidatePowerConsumption(x, out):
 
 # ---------------- CREATE INPUT AND OUTPUT ARRAYS TO PASS TO THE KERNEL ----------------------
 
-In = np.arange(TOTAL_HOUSES,dtype=np.float64)               # Creates an input array of 64-bit precision
-Out = np.arange(GRID_SIZE, dtype=np.float64)                # Creates an output array of 64-bit precision
-InPinned = cuda.pinned_array(TOTAL_HOUSES,dtype=np.float64) # Creates a pinned memory array of 64-bit precision
+In = np.arange(TOTAL_HOUSES,dtype=np.float64)                # Creates an input array of 64-bit precision
+InPinned = cuda.pinned_array(TOTAL_HOUSES,dtype=np.float64)  # Creates a pinned memory array of 64-bit precision
 
 # ---------------------------------------- TIMER --------------------------------------------
 # We can time our kernels using this:
@@ -78,6 +77,8 @@ startTimer = time.perf_counter()
 
 # -------- UPDATE THE PLOT FOR EVERY HOUR TO CREATE THE SIMULATION -------------
 for hour in range(24):
+
+  Out = np.empty(GRID_SIZE, dtype=np.float64) # Creates an output array of 64-bit precision
 
   # Allocate space on the device for the input data:
   d_In = cuda.to_device(In)
@@ -89,15 +90,18 @@ for hour in range(24):
   consolidatePowerConsumption[GRID_SIZE, BLOCK_SIZE](d_In, d_Out)
 
   # Wait for all threads to complete
-  cuda.synchronize()
-  Out = d_Out.copy_to_host.toarray()
+  # cuda.synchronize()
+
+  # Out = np.empty(shape=d_Out.shape, dtype=d_Out.dtype)
+  d_Out.copy_to_host(Out) # Copy contents from the device d_Out to host Out
+  # Out is an ndarray https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html
 
   # Clear the plot
   plt.clf() # clf = clear the figure: https://matplotlib.org/3.1.1/api/_as_gen/matplotlib.pyplot.clf.html
   total_consumption = 0 # Total power consumption (for the plot) - reset with each loop
   
-  for blockId in Out:
-    cur = Out[blockId]            # The power consumption for that one block in that one hour
+  for blockId in range(Out.size):
+    cur = Out[int(blockId)]       # The power consumption for that one block in that one hour
     total_consumption += cur      # The power consumption total
 
     xcoord = blockId // MAP_SIZE  # ex) if the blockId is 1501, then 1501 / 50 = x coordinate of 30
@@ -113,7 +117,7 @@ for hour in range(24):
   # add a small total_consumption text to the plot
   plt.text(10, MAP_SIZE-10, 'Total Consumption: ' + str(total_consumption))
 
-  # set title as time
+  # set title
   plt.title("Power Consumption in a City of 360,000 Houses")
   
   # save plot to file
