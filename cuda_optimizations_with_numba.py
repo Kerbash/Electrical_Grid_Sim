@@ -66,8 +66,15 @@ def consolidatePowerConsumption(x, out):
 
 # ---------------- CREATE INPUT AND OUTPUT ARRAYS TO PASS TO THE KERNEL ----------------------
 
-In = np.arange(TOTAL_HOUSES,dtype=np.float64)                # Creates an input array of 64-bit precision
-InPinned = cuda.pinned_array(TOTAL_HOUSES,dtype=np.float64)  # Creates a pinned memory array of 64-bit precision
+#In = np.empty(TOTAL_HOUSES,dtype=np.float64)        # Creates an input array of 64-bit precision
+In = cuda.pinned_array(TOTAL_HOUSES,dtype=np.float64)  # Creates a pinned memory array of 64-bit precision
+
+# Randon numbers: https://numpy.org/doc/stable/reference/random/generated/numpy.random.randn.html
+mean = 12      # mean
+stdDev = 5.5   # standard deviation for random numbers
+In[:] = mean + stdDev * np.random.randn(*In.shape)
+
+
 
 # ---------------------------------------- TIMER --------------------------------------------
 # We can time our kernels using this:
@@ -75,13 +82,13 @@ InPinned = cuda.pinned_array(TOTAL_HOUSES,dtype=np.float64)  # Creates a pinned 
 # https://docs.python.org/3/library/time.html#time.perf_counter - there is a nanoseconds option too
 startTimer = time.perf_counter()
 
+# Allocate space on the device for the input data:
+d_In = cuda.to_device(In)
+
+Out = np.empty(GRID_SIZE, dtype=np.float64) # Creates an output array of 64-bit precision
+
 # -------- UPDATE THE PLOT FOR EVERY HOUR TO CREATE THE SIMULATION -------------
 for hour in range(24):
-
-  Out = np.empty(GRID_SIZE, dtype=np.float64) # Creates an output array of 64-bit precision
-
-  # Allocate space on the device for the input data:
-  d_In = cuda.to_device(In)
 
   # Allocate space on the device for the output data:
   d_Out = cuda.device_array_like(Out)
