@@ -29,9 +29,20 @@ import math
 import numpy as np
 import time
 import sys
+import matplotlib.pyplot as plt
 
-TOTAL_HOUSES = 320000
+# Sizes:
+TOTAL_HOUSES = 320000                           
+BLOCK_SIZE = 128                          # NUMBER OF THREADS PER BLOCK
+GRID_SIZE = TOTAL_HOUSES//BLOCK_SIZE + 1  # NUMBER OF BLOCKS PER GRID = 320000 / 128 THREADS = 2,500 BLOCKS
+MAP_SIZE = math.sqrt(GRID_SIZE)           # 50 BY 50 SQUARE HEATMAP (sqrt(BLOCKS)
+
+# Hardware Constraints:
 MAX_BLOCKS = 65535
+
+# CUDA configuration - grid size
+if(GRID_SIZE > MAX_BLOCKS):
+  sys.exit("The number of blocks exceeds the maximum")
 
 # Learn more about our GPU using this function:
 # cuda.detect()
@@ -53,23 +64,11 @@ def consolidatePowerConsumption(x, out):
   for i in range(stride):
     out[idx] = out[idx] + x[i]
 
-
 # ---------------- CREATE INPUT AND OUTPUT ARRAYS TO PASS TO THE KERNEL ----------------------
 
-A = np.arange(TOTAL_HOUSES,dtype=np.float32)         # Creates an array of floats
-B = cuda.pinned_array(TOTAL_HOUSES,dtype=np.float32) # Creates a pinned memory array of floats
-
-# Allocate space on the device for the input data:
-d_A = cuda.to_device(A)
-
-# Allocate space on the device for the output data:
-d_Out = cuda.device_array_like(d_A)
-
-# CUDA configuration
-threads_per_block = 128                                   # blocksize
-blocks_per_grid = (TOTAL_HOUSES//threads_per_block) + 1   # gridsize - "//" performs integer division
-if(blocks_per_grid > MAX_BLOCKS):
-  sys.exit("The number of blocks exceeds the maximum")
+In = np.arange(TOTAL_HOUSES,dtype=np.float64)               # Creates an input array of 64-bit precision
+Out = np.arange(GRID_SIZE, dtype=np.float64)                # Creates an output array of 64-bit precision
+InPinned = cuda.pinned_array(TOTAL_HOUSES,dtype=np.float64) # Creates a pinned memory array of 64-bit precision
 
 # ---------------------------------------- TIMER --------------------------------------------
 # We can time our kernels using this:
@@ -77,25 +76,54 @@ if(blocks_per_grid > MAX_BLOCKS):
 # https://docs.python.org/3/library/time.html#time.perf_counter - there is a nanoseconds option too
 startTimer = time.perf_counter()
 
-# TODO - LOOP THROUGH FOR EACH HOUR
+# -------- UPDATE THE PLOT FOR EVERY HOUR TO CREATE THE SIMULATION -------------
+for hour in range(24):
 
-# ---------------------- CALL THE KERNEL FUNCTION -------------------------------------------- 
-consolidatePowerConsumption[blocks_per_grid, threads_per_block](d_A, d_Out)
+  # Allocate space on the device for the input data:
+  d_In = cuda.to_device(In)
 
-# TODO - OUTPUT THE PLOT FOR EACH HOUR
-# TODO - SAVE THE PLOT
+  # Allocate space on the device for the output data:
+  d_Out = cuda.device_array_like(Out)
+    
+  # ---------------------- CALL THE KERNEL FUNCTION -------------------------------------------- 
+  consolidatePowerConsumption[GRID_SIZE, BLOCK_SIZE](d_In, d_Out)
 
-# wait for all threads to complete
-cuda.synchronize()
-stopCompTime = time.perf_counter()
+  # Wait for all threads to complete
+  cuda.synchronize()
+  Out = d_Out.copy_to_host.toarray()
 
-# Return the matrix to the host
-d_Out.copy_to_host()
+  # Clear the plot
+  plt.clf() # clf = clear the figure: https://matplotlib.org/3.1.1/api/_as_gen/matplotlib.pyplot.clf.html
+  total_consumption = 0 # Total power consumption (for the plot) - reset with each loop
+  
+  for blockId in Out:
+    cur = Out[blockId]            # The power consumption for that one block in that one hour
+    total_consumption += cur      # The power consumption total
 
+    xcoord = blockId // MAP_SIZE  # ex) if the blockId is 1501, then 1501 / 50 = x coordinate of 30
+    ycoord = blockId % MAP_SIZE   # ex) if the blockId is 1501, then 1501 % 50 = y coordinate of 1
+    
+    # set closer to red if the consumption is higher green if low
+    color = (1 - min(cur / 10, 1), 1 - min(cur / 10, 1), 1)
+    plt.plot(xcoord, ycoord, marker='s', color=color)
+    
+  # set plot to Map Size
+  plt.axis([0, MAP_SIZE, 0, MAP_SIZE])
+  
+  # add a small total_consumption text to the plot
+  plt.text(10, MAP_SIZE-10, 'Total Consumption: ' + str(total_consumption))
+
+  # set title as time
+  plt.title("Power Consumption in a City of 360,000 Houses")
+  
+  # save plot to file
+  # plt.savefig(str(hour) + '.png')
+
+# stopCompTime = time.perf_counter()
 stopFullTime = time.perf_counter()
 
 # See timing results
-print(f"Time spent just computing : {stopCompTime - startTimer:0.8f} seconds")
+# print(f"Time spent just computing : {stopCompTime - startTimer:0.8f} seconds")
 print(f"Time with memory copying  : {stopFullTime - startTimer:0.8f} seconds")
 
 
