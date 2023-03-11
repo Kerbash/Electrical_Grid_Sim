@@ -116,18 +116,22 @@ for hour in range(24):
   
   # add a small total_consumption text to the plot
   plt.text(10, MAP_SIZE-10, 'Total Consumption: ' + str(total_consumption))
+  plt.text(10, MAP_SIZE-20, 'Hour: ' + str(hour))
 
   # set title
   plt.title("Power Consumption in a City of 360,000 Houses")
-  
-  # save plot to file
-  # plt.savefig(str(hour) + '.png')
 
-# stopCompTime = time.perf_counter()
+  # plt.show()
+  
+stopCompTime = time.perf_counter()
+
+# save plot to file
+# plt.savefig('simulation_with_numba.png')
+
 stopFullTime = time.perf_counter()
 
 # See timing results
-# print(f"Time spent just computing : {stopCompTime - startTimer:0.8f} seconds")
+print(f"Time spent just computing : {stopCompTime - startTimer:0.8f} seconds")
 print(f"Time with memory copying  : {stopFullTime - startTimer:0.8f} seconds")
 
 
