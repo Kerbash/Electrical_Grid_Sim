@@ -79,6 +79,7 @@ for hour in range(24):
     # set title as time
     plt.title(datetime_now)
     # save plot to file
-    plt.savefig(str(hour) + '.png')
+    plt.show()
+    # plt.savefig(str(hour) + '.png')
 
 tqdm.close()
