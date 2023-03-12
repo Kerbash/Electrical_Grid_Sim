@@ -5,8 +5,8 @@ import numpy as np
 # Needs to run CUDA on version 11.7 and torch 1.13.1
 # pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
 
-MATRIX_SIZE = 1024
-KERNEL_SIZE = 32
+MATRIX_SIZE = 2048
+KERNEL_SIZE = 16
 
 import torch
 import torch.nn.functional as F
@@ -76,14 +76,27 @@ def pytorch_custom_pooling(input_tensor, pool_size):
     return output_pinned
 
 
-for i in range(1):
-    # Create a 2D tensor of random values
+for i in range(12):
+    """    # Create a 2D tensor of random values
     input_tensor = torch.rand(MATRIX_SIZE, MATRIX_SIZE, dtype=torch.double)
+    """
+    # load map from unpickle
+    import pickle
+    with open('matrix.pickle', 'rb') as handle:
+        matrix = pickle.load(handle)
+    # multiply the matrix by i
+    matrix = matrix * i
+
+    # convert to torch tensor
+    input_tensor = torch.tensor(matrix, dtype=torch.double)
     pool = pytorch_builtin_pooling(input_tensor, KERNEL_SIZE)
 
     # copy the pooled tensor back to the CPU
     pool_cpu = pool.cpu()
 
     # create a heat map from the matrix
-    plt.imshow(pool_cpu, cmap='hot', interpolation='nearest')
+    plt.imshow(pool_cpu, cmap='hot', interpolation='nearest', vmin=0, vmax=7500)
+    # save the heat map
+    plt.savefig('heat_map_' + str(i) + '.png')
     plt.show()
+
