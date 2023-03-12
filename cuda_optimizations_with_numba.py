@@ -36,9 +36,18 @@ CITY_WIDTH = 4096           # 4096 * 4096 = 16,777,216 total houses
                             # Note: There does not need to be a thread for every house.
                             # There just needs to be a thread for each heatmap cell.
                                            
-BLOCK_SIZE = 64                                # NUMBER OF THREADS PER BLOCK
-MAP_SIZE = 64                                  # SIZE OF SQUARE HEATMAP = 64 * 64 = 4096 heatmap cells to fill
-GRID_SIZE = (MAP_SIZE * MAP_SIZE)//BLOCK_SIZE  # NUMBER OF BLOCKS PER GRID = 4096 / 64 THREADS = 64 BLOCKS
+BLOCK_SIZE = 64                           # TOTAL NUMBER OF THREADS PER ONE BLOCK
+BLOCK_WIDTH = int(math.sqrt(BLOCK_SIZE))  # WIDTH OF ONE BLOCK (IN THREADS)
+BLOCK_SHAPE = (BLOCK_WIDTH, BLOCK_WIDTH)  # TUPLE FOR THE KERNEL
+
+MAP_WIDTH = 64                             # SIZE OF SQUARE HEATMAP = 64 * 64 = 4096 heatmap cells to fill
+MAP_SHAPE = (MAP_WIDTH, MAP_WIDTH)
+
+GRID_WIDTH = int(MAP_WIDTH // BLOCK_WIDTH) # 64 / 8 = 8 blocks across the map
+GRID_SHAPE = (GRID_WIDTH, GRID_WIDTH)      # TUPLE FOR THE KERNEL
+
+SMALL_TILE = BLOCK_WIDTH # tiled on the heatmap (so a 64 by 64 heatmap has tiles of 8 by 8)
+LARGE_TILE = GRID_WIDTH  # tiled on the citymap (so a 4096 by 4096 city has tiles of 64 by 64)
 
 # Learn more about our GPU using this function:
 # cuda.detect()
@@ -54,36 +63,46 @@ GRID_SIZE = (MAP_SIZE * MAP_SIZE)//BLOCK_SIZE  # NUMBER OF BLOCKS PER GRID = 409
 # numba.cuda.local.array(shape, type) - create a local array
 # numba.cuda.shared.array(shape, type) - create a shared memory array
 
+def poolATile(In, x, y):
+  temp = 0
+  for i in range(LARGE_TILE):
+    for j in range(LARGE_TILE):
+      temp += In[x*LARGE_TILE + i][y*LARGE_TILE + j]
+  return temp
+  
 @cuda.jit
 def consolidatePowerConsumption(In, Out):
-  tile = cuda.gridsize(1)  # The tile stride is the same as the width of a block (gridsize)
-  print(tile)
-
-  sharedIn = cuda.shared.array(shape=(tile, tile), dtype=np.float64) # Each thread takes care of 1 tile of the input matrix.
-  localOut = np.float64(0.) # Each thread takes care of 1 cell of the heatmap.
   
+  # The input will come from a large tile; output will be on a small tile
+  # sharedIn = cuda.shared.array(shape=(LARGE_TILE, LARGE_TILE), dtype=np.float64)
+  # localOut = cuda.local.array(shape=(SMALL_TILE,SMALL_TILE), dtype=np.float64) 
+
   x, y = cuda.grid(2)
-  idx = cuda.threadIdx.x
-  idy = cuda.threadIdy.y
   
-  for i in range(tile):
+  # Load the input data into the shared memory
+  for i in range(SMALL_TILE):
+    for j in range(SMALL_TILE):
+      #Out[x*SMALL_TILE + i][y*SMALL_TILE + j] = poolATile(In, x, y)
+      for k in range(LARGE_TILE):
+        for l in range(LARGE_TILE):
+          Out[x*SMALL_TILE + i][y*SMALL_TILE + j] += In[x*LARGE_TILE + k][y*LARGE_TILE + l]
+      
+  # Wait for load to finish
+  cuda.syncthreads()
 
-    # Use the shared memory
-    sharedIn[idy, idx] = 0
-    if y < In.shape[0] and (idx + i * BLOCK_SIZE) < In.shape[1]:
-      sharedIn[idy, idx] = In[y, idx + i * BLOCK_SIZE] # Load the data to shared.
+  # Compute the output data
+  # for i in range(SMALL_TILE):
+  #   for j in range(SMALL_TILE):
+      # localOut[i, j] += sharedIn[x*SMALL_TILE+i, y*SMALL_TILE+j]
 
-    # Wait for load to finish
-    cuda.syncthreads()
-
-    for j in range(BLOCK_SIZE):
-      localOut += sharedIn[idy, j]
-
-    # Wait until all threads finish computing
-    cuda.syncthreads()
+  # Wait until all threads finish computing
+  # cuda.syncthreads()
   
-  if y < Out.shape[0] and x < Out.shape[1]:
-    Out[y, x] = localOut
+  # for i in range(SMALL_TILE):
+  #   for j in range(SMALL_TILE):
+      #Out[i, j] = localOut[i, j]
+
+  # cuda.syncthreads()
 
 # ---------------- CREATE INPUT AND OUTPUT ARRAYS TO PASS TO THE KERNEL ----------------------
 # max_pinned_size = cuda.max_pinned_bytes()
@@ -91,13 +110,12 @@ def consolidatePowerConsumption(In, Out):
 #   sys.exit("The city size exceeds pinned memory size")
 
 cityShape = (CITY_WIDTH, CITY_WIDTH)
-#In = np.empty(TOTAL_HOUSES, dtype=np.float64)       # Creates an input array of 64-bit precision
 In = cuda.pinned_array(cityShape, dtype=np.float64)  # Creates a pinned memory array of 64-bit precision
 
 # Random numbers: https://numpy.org/doc/stable/reference/random/generated/numpy.random.randn.html
 mean = 12      # mean
 stdDev = 5.5   # standard deviation for random numbers
-In[:] = mean + stdDev * np.random.randn(*In.shape)
+In[:,:] = mean + stdDev * np.random.randn(*In.shape)
 
 
 # ---------------------------------------- TIMER --------------------------------------------
@@ -109,8 +127,7 @@ startTimer = time.perf_counter()
 # Allocate space on the device for the input data:
 d_In = cuda.to_device(In)
 
-neighborhoodShape = (GRID_SIZE, GRID_SIZE)
-Out = np.empty(neighborhoodShape, dtype=np.float64) # Creates an output array of 64-bit precision
+Out = np.empty(MAP_SHAPE, dtype=np.float64) # Creates an output array of 64-bit precision
 
 # Allocate space on the device for the output data:
 d_Out = cuda.device_array_like(Out)
@@ -119,10 +136,8 @@ d_Out = cuda.device_array_like(Out)
 # TODO: set to range(24) for 24 hours
 for hour in range(1):
 
-  d_Out[:] = 0 # Clear the output array for each hour
-
   # ---------------------- CALL THE KERNEL FUNCTION -------------------------------------------- 
-  consolidatePowerConsumption[GRID_SIZE, BLOCK_SIZE](d_In, d_Out)
+  consolidatePowerConsumption[GRID_SHAPE, BLOCK_SHAPE](d_In, d_Out)
 
   # Out = np.empty(shape=d_Out.shape, dtype=d_Out.dtype)
   d_Out.copy_to_host(Out) # Copy contents from the device d_Out to host Out
@@ -136,8 +151,8 @@ for hour in range(1):
   plt.imshow(Out, cmap='hot', interpolation='nearest')
   
   # add a small total_consumption text to the plot
-  # plt.text(10, MAP_SIZE-10, 'Total Consumption: ' + str(total_consumption))
-  plt.text(10, MAP_SIZE-20, 'Hour: ' + str(hour))
+  # plt.text(10, MAP_WIDTH-10, 'Total Consumption: ' + str(total_consumption))
+  plt.text(10, MAP_WIDTH-20, 'Hour: ' + str(hour))
 
   # set title
   plt.title("Power Consumption in a City of 360,000 Houses")
