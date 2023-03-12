@@ -57,14 +57,13 @@ GRID_SIZE = (MAP_SIZE * MAP_SIZE)//BLOCK_SIZE  # NUMBER OF BLOCKS PER GRID = 409
 @cuda.jit
 def consolidatePowerConsumption(In, Out):
   tile = cuda.gridsize(1)  # The tile stride is the same as the width of a block (gridsize)
-  print(tile)
 
-  sharedIn = cuda.shared.array(shape=(tile, tile), dtype=np.float64) # Each thread takes care of 1 tile of the input matrix.
+  sharedIn = cuda.shared.array(shape=(4096, 4096), dtype=np.float64) # Each thread takes care of 1 tile of the input matrix.
   localOut = np.float64(0.) # Each thread takes care of 1 cell of the heatmap.
   
   x, y = cuda.grid(2)
   idx = cuda.threadIdx.x
-  idy = cuda.threadIdy.y
+  idy = cuda.threadIdx.y
   
   for i in range(tile):
 
