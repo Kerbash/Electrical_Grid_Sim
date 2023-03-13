@@ -1,4 +1,4 @@
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # CUDA_OPTIMIZATIONS_WITH_NUMBA.PY
 # Using the GPU to accelerate an electrical power grid visualization
 #
@@ -25,35 +25,36 @@
 # Note: Numba does not implement: dynamic parallelism and texture memory
 
 from numba import cuda
-import math    
+import math
 import numpy as np
 import time
 import sys
 import matplotlib.pyplot as plt
 
 # Sizes:
-CITY_WIDTH = 4096           # 4096 * 4096 = 16,777,216 total houses          
-                            # Note: There does not need to be a thread for every house.
-                            # There just needs to be a thread for each heatmap cell.
-                                           
-BLOCK_SIZE = 64                           # TOTAL NUMBER OF THREADS PER ONE BLOCK
+CITY_WIDTH = 4096  # 4096 * 4096 = 16,777,216 total houses
+# Note: There does not need to be a thread for every house.
+# There just needs to be a thread for each heatmap cell.
+
+BLOCK_SIZE = 64  # TOTAL NUMBER OF THREADS PER ONE BLOCK
 BLOCK_WIDTH = int(math.sqrt(BLOCK_SIZE))  # WIDTH OF ONE BLOCK (IN THREADS)
 BLOCK_SHAPE = (BLOCK_WIDTH, BLOCK_WIDTH)  # TUPLE FOR THE KERNEL
 
-MAP_WIDTH = 64                             # SIZE OF SQUARE HEATMAP = 64 * 64 = 4096 heatmap cells to fill
+MAP_WIDTH = 64  # SIZE OF SQUARE HEATMAP = 64 * 64 = 4096 heatmap cells to fill
 MAP_SHAPE = (MAP_WIDTH, MAP_WIDTH)
 
-GRID_WIDTH = int(MAP_WIDTH // BLOCK_WIDTH) # 64 / 8 = 8 blocks across the map
-GRID_SHAPE = (GRID_WIDTH, GRID_WIDTH)      # TUPLE FOR THE KERNEL
+GRID_WIDTH = int(MAP_WIDTH // BLOCK_WIDTH)  # 64 / 8 = 8 blocks across the map
+GRID_SHAPE = (GRID_WIDTH, GRID_WIDTH)  # TUPLE FOR THE KERNEL
 
-SMALL_TILE = BLOCK_WIDTH # tiled on the heatmap (so a 64 by 64 heatmap has tiles of 8 by 8)
+SMALL_TILE = BLOCK_WIDTH  # tiled on the heatmap (so a 64 by 64 heatmap has tiles of 8 by 8)
 LARGE_TILE = GRID_WIDTH  # tiled on the citymap (so a 4096 by 4096 city has tiles of 64 by 64)
+
 
 # Learn more about our GPU using this function:
 # cuda.detect()
 
 # --------------------------------- KERNEL FUNCTION --------------------------------------
-# See example kernel functions: 
+# See example kernel functions:
 # https://thedatafrog.com/en/articles/cuda-kernel-python/
 # https://colab.research.google.com/github/cbernet/maldives/blob/master/numba/numba_cuda_kernel.ipynb#scrollTo=fACSmHLzJanZ
 # https://numba.readthedocs.io/en/stable/cuda/examples.html#matrix-multiplication
@@ -64,45 +65,17 @@ LARGE_TILE = GRID_WIDTH  # tiled on the citymap (so a 4096 by 4096 city has tile
 # numba.cuda.shared.array(shape, type) - create a shared memory array
 
 def poolATile(In, x, y):
-  temp = 0
-  for i in range(LARGE_TILE):
-    for j in range(LARGE_TILE):
-      temp += In[x*LARGE_TILE + i][y*LARGE_TILE + j]
-  return temp
-  
+    temp = 0
+    for i in range(LARGE_TILE):
+        for j in range(LARGE_TILE):
+            temp += In[x * LARGE_TILE + i][y * LARGE_TILE + j]
+    return temp
+
+
 @cuda.jit
 def consolidatePowerConsumption(In, Out):
-  
-  # The input will come from a large tile; output will be on a small tile
-  # sharedIn = cuda.shared.array(shape=(LARGE_TILE, LARGE_TILE), dtype=np.float64)
-  # localOut = cuda.local.array(shape=(SMALL_TILE,SMALL_TILE), dtype=np.float64) 
 
-  x, y = cuda.grid(2)
-  
-  # Load the input data into the shared memory
-  for i in range(SMALL_TILE):
-    for j in range(SMALL_TILE):
-      #Out[x*SMALL_TILE + i][y*SMALL_TILE + j] = poolATile(In, x, y)
-      for k in range(LARGE_TILE):
-        for l in range(LARGE_TILE):
-          Out[x*SMALL_TILE + i][y*SMALL_TILE + j] += In[x*LARGE_TILE + k][y*LARGE_TILE + l]
-      
-  # Wait for load to finish
-  cuda.syncthreads()
 
-  # Compute the output data
-  # for i in range(SMALL_TILE):
-  #   for j in range(SMALL_TILE):
-      # localOut[i, j] += sharedIn[x*SMALL_TILE+i, y*SMALL_TILE+j]
-
-  # Wait until all threads finish computing
-  # cuda.syncthreads()
-  
-  # for i in range(SMALL_TILE):
-  #   for j in range(SMALL_TILE):
-      #Out[i, j] = localOut[i, j]
-
-  # cuda.syncthreads()
 
 # ---------------- CREATE INPUT AND OUTPUT ARRAYS TO PASS TO THE KERNEL ----------------------
 # max_pinned_size = cuda.max_pinned_bytes()
@@ -112,10 +85,29 @@ def consolidatePowerConsumption(In, Out):
 cityShape = (CITY_WIDTH, CITY_WIDTH)
 In = cuda.pinned_array(cityShape, dtype=np.float64)  # Creates a pinned memory array of 64-bit precision
 
+
+
+
 # Random numbers: https://numpy.org/doc/stable/reference/random/generated/numpy.random.randn.html
-mean = 12      # mean
-stdDev = 5.5   # standard deviation for random numbers
-In[:,:] = mean + stdDev * np.random.randn(*In.shape)
+mean = 12  # mean
+stdDev = 5.5  # standard deviation for random numbers
+In[:, :] = mean + stdDev * np.random.randn(*In.shape)
+
+# Clear the plot
+plt.clf()  # clf = clear the figure: https://matplotlib.org/3.1.1/api/_as_gen/matplotlib.pyplot.clf.html
+# total_consumption = 0 # Total power consumption (for the plot) - reset with each loop
+
+# create a heat map from the matrix
+plt.imshow(In, cmap='hot', interpolation='nearest')
+
+# add a small total_consumption text to the pl
+
+# set title
+plt.title("Power Consumption in a City of 360,000 Houses")
+
+plt.show()
+
+
 
 
 # ---------------------------------------- TIMER --------------------------------------------
@@ -127,7 +119,7 @@ startTimer = time.perf_counter()
 # Allocate space on the device for the input data:
 d_In = cuda.to_device(In)
 
-Out = np.empty(MAP_SHAPE, dtype=np.float64) # Creates an output array of 64-bit precision
+Out = np.empty(MAP_SHAPE, dtype=np.float64)  # Creates an output array of 64-bit precision
 
 # Allocate space on the device for the output data:
 d_Out = cuda.device_array_like(Out)
@@ -135,30 +127,29 @@ d_Out = cuda.device_array_like(Out)
 # -------- UPDATE THE PLOT FOR EVERY HOUR TO CREATE THE SIMULATION -------------
 # TODO: set to range(24) for 24 hours
 for hour in range(1):
+    # ---------------------- CALL THE KERNEL FUNCTION --------------------------------------------
+    consolidatePowerConsumption[GRID_SHAPE, BLOCK_SHAPE](d_In, d_Out)
 
-  # ---------------------- CALL THE KERNEL FUNCTION -------------------------------------------- 
-  consolidatePowerConsumption[GRID_SHAPE, BLOCK_SHAPE](d_In, d_Out)
+    # Out = np.empty(shape=d_Out.shape, dtype=d_Out.dtype)
+    d_Out.copy_to_host(Out)  # Copy contents from the device d_Out to host Out
+    # Out is an ndarray https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html
 
-  # Out = np.empty(shape=d_Out.shape, dtype=d_Out.dtype)
-  d_Out.copy_to_host(Out) # Copy contents from the device d_Out to host Out
-  # Out is an ndarray https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html
+    # Clear the plot
+    plt.clf()  # clf = clear the figure: https://matplotlib.org/3.1.1/api/_as_gen/matplotlib.pyplot.clf.html
+    # total_consumption = 0 # Total power consumption (for the plot) - reset with each loop
 
-  # Clear the plot
-  plt.clf() # clf = clear the figure: https://matplotlib.org/3.1.1/api/_as_gen/matplotlib.pyplot.clf.html
-  #total_consumption = 0 # Total power consumption (for the plot) - reset with each loop
-  
-  # create a heat map from the matrix
-  plt.imshow(Out, cmap='hot', interpolation='nearest')
-  
-  # add a small total_consumption text to the plot
-  # plt.text(10, MAP_WIDTH-10, 'Total Consumption: ' + str(total_consumption))
-  plt.text(10, MAP_WIDTH-20, 'Hour: ' + str(hour))
+    # create a heat map from the matrix
+    plt.imshow(Out, cmap='hot', interpolation='nearest')
 
-  # set title
-  plt.title("Power Consumption in a City of 360,000 Houses")
+    # add a small total_consumption text to the plot
+    # plt.text(10, MAP_WIDTH-10, 'Total Consumption: ' + str(total_consumption))
+    plt.text(10, MAP_WIDTH - 20, 'Hour: ' + str(hour))
 
-  plt.show()
-  
+    # set title
+    plt.title("Power Consumption in a City of 360,000 Houses")
+
+    plt.show()
+
 stopCompTime = time.perf_counter()
 
 # save plot to file
@@ -170,8 +161,7 @@ stopFullTime = time.perf_counter()
 print(f"Time spent just computing : {stopCompTime - startTimer:0.8f} seconds")
 print(f"Time with memory copying  : {stopFullTime - startTimer:0.8f} seconds")
 
-
-# +++++++++++++++++ MORE NOTES +++++++++++++++++ 
+# +++++++++++++++++ MORE NOTES +++++++++++++++++
 
 # https://thedatafrog.com/en/articles/boost-python-gpu/
 # We may have to store things in contiguous memory. Example:
