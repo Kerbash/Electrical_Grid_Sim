@@ -74,36 +74,7 @@ def poolATile(In, x, y):
 
 @cuda.jit
 def consolidatePowerConsumption(In, Out):
-    # The input will come from a large tile; output will be on a small tile
-    # sharedIn = cuda.shared.array(shape=(LARGE_TILE, LARGE_TILE), dtype=np.float64)
-    # localOut = cuda.local.array(shape=(SMALL_TILE,SMALL_TILE), dtype=np.float64)
 
-    x, y = cuda.grid(2)
-
-    # Load the input data into the shared memory
-    for i in range(SMALL_TILE):
-        for j in range(SMALL_TILE):
-            # Out[x*SMALL_TILE + i][y*SMALL_TILE + j] = poolATile(In, x, y)
-            for k in range(LARGE_TILE):
-                for l in range(LARGE_TILE):
-                    Out[x * SMALL_TILE + i][y * SMALL_TILE + j] += In[x * LARGE_TILE + k][y * LARGE_TILE + l]
-
-    # Wait for load to finish
-    cuda.syncthreads()
-
-    # Compute the output data
-    # for i in range(SMALL_TILE):
-    #   for j in range(SMALL_TILE):
-    # localOut[i, j] += sharedIn[x*SMALL_TILE+i, y*SMALL_TILE+j]
-
-    # Wait until all threads finish computing
-    # cuda.syncthreads()
-
-    # for i in range(SMALL_TILE):
-    #   for j in range(SMALL_TILE):
-    # Out[i, j] = localOut[i, j]
-
-    # cuda.syncthreads()
 
 
 # ---------------- CREATE INPUT AND OUTPUT ARRAYS TO PASS TO THE KERNEL ----------------------
