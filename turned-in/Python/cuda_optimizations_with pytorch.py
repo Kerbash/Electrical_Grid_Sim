@@ -15,13 +15,7 @@
 # https://numba.readthedocs.io/en/stable/user/installing.html
 #
 # Use the following commands if using Conda:
-# $ conda install numba
-# $ conda install cudatoolkit
-#
-# +++++++++++++++++ LIBRARY USED +++++++++++++++++
-# Numba library information: https://numba.readthedocs.io/en/stable/cuda/overview.html
-# Numba library contents: https://numba.readthedocs.io/en/stable/cuda/index.html
-# Note: Numba does not implement: dynamic parallelism and texture memory
+# $ conda install pytorch
 
 from random import random
 
