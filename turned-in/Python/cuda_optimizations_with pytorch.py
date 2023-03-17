@@ -1,4 +1,29 @@
+# ---------------------------------------------------------------------------
+# cuda_optimization_with pytorch.py
+# Using the GPU to accelerate an electrical power grid visualization
+#
+# Date:                   03/14/2023
+# Authors:                Pragati Dode, Breanna Powell, and William Selke
+#
+# +++++++++++++++++ DETAILS ABOUT SYSTEM ++++++++++++++
+# IDEs:                   Visual Studio Code; PyCharm
+# Processor Used:         11th Gen Intel(R) Core(TM) i7-11700 @ 2.50GHz 2.50 GHz
+# GPU Used:               NVIDIA GeForce RTX 3060 Ti
+# Device Architecture:    Ampere
+#
+# +++++++++++++++++ INSTALLATION INSTRUCTIONS +++++++++++++++++
+# https://numba.readthedocs.io/en/stable/user/installing.html
+#
+# Use the following commands if using Conda:
+# $ conda install numba
+# $ conda install cudatoolkit
+#
+# +++++++++++++++++ LIBRARY USED +++++++++++++++++
+# Numba library information: https://numba.readthedocs.io/en/stable/cuda/overview.html
+# Numba library contents: https://numba.readthedocs.io/en/stable/cuda/index.html
+# Note: Numba does not implement: dynamic parallelism and texture memory
 
+from random import random
 
 # Needs both CUDA
 # Needs to run CUDA on version 11.7 and torch 1.13.1
@@ -6,8 +31,16 @@
 
 # nv-nsight-cu-cli --target-processes all --export output.ncu-rep python "cuda_optimizations_with pytorch.py"
 
-MATRIX_SIZE = 4096
-KERNEL_SIZE = 64
+
+MATRIX_SIZE = 32768
+
+
+
+KERNEL_SIZE = 512
+
+
+
+
 
 import torch
 import time
@@ -44,12 +77,11 @@ def pytorch_builtin_pooling(input_tensor, pool_size):
     # Create a tensor to hold the output and move it to the GPU
     output_gpu = torch.empty((output_height, output_width), dtype=torch.double, device='cuda')
 
-    # Perform max pooling on the GPU
     input_gpu = input_tensor.to(device='cuda')
 
     calc_time = time.perf_counter()
-    output_gpu = torch.nn.functional.max_pool2d(input_gpu.view(1, 1, input_height, input_width), pool_size).view(
-        output_height, output_width)
+    # Perform max pooling on the GPU
+    output_gpu = F.max_pool2d(input_gpu.view(1, 1, input_height, input_width), pool_size).view(output_height, output_width)
     calc_time = time.perf_counter() - calc_time
 
     # copy output to CPU
@@ -97,8 +129,7 @@ def pytorch_custom_pooling(input_tensor, pool_size):
 
     # Perform max pooling on the GPU
     calc_time = time.perf_counter()
-    output_gpu = torch.nn.functional.max_pool2d(input_gpu.view(1, 1, input_height, input_width), pool_size).view(
-        output_height, output_width)
+    output_gpu = F.max_pool2d(input_gpu.view(1, 1, input_height, input_width), pool_size).view(output_height, output_width)
     calc_time = time.perf_counter() - calc_time
 
     # Transfer output tensor back to pinned memory on the CPU
@@ -123,17 +154,16 @@ for i in range(1):
     # load map from unpickle
     import pickle
 
-    with open('matrix.pickle', 'rb') as handle:
-        matrix = pickle.load(handle)
-    # multiply the matrix by i
-    matrix = matrix
+    # generate a matrix of size MATRIX_SIZE x MATRIX_SIZE filled with random float
+    matrix = [[random() for x in range(MATRIX_SIZE)] for y in range(MATRIX_SIZE)]
+
 
     # convert to torch tensor
     input_tensor = torch.tensor(matrix, dtype=torch.double)
-    pool = pytorch_builtin_pooling(input_tensor, KERNEL_SIZE)
+    pool = pytorch_custom_pooling(input_tensor, KERNEL_SIZE)
 
     # create a heat map from the matrix
-    plt.imshow(pool, cmap='hot', interpolation='nearest', vmin=0, vmax=7500)
+    plt.imshow(pool, cmap='hot', interpolation='nearest', vmin=0, vmax=1)
     # save the heat map
     plt.savefig('heat_map_' + str(i) + '.png')
     plt.show()
