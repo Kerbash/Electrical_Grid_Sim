@@ -13,17 +13,8 @@
 # GPU Used:               NVIDIA GeForce RTX 3060 Ti
 # Device Architecture:    Ampere
 #
-# +++++++++++++++++ INSTALLATION INSTRUCTIONS +++++++++++++++++
-# https://numba.readthedocs.io/en/stable/user/installing.html
-#
-# Use the following commands if using Conda:
-# $ conda install numba
-# $ conda install cudatoolkit
-#
-# +++++++++++++++++ LIBRARY USED +++++++++++++++++
-# Numba library information: https://numba.readthedocs.io/en/stable/cuda/overview.html
-# Numba library contents: https://numba.readthedocs.io/en/stable/cuda/index.html
-# Note: Numba does not implement: dynamic parallelism and texture memory
+# +++++++++++++++++ COMPILE INSTRUCTIONS +++++++++++++++++
+# nvcc "C++ regular.cu" -o regular
  */
 
 #include <iostream>
